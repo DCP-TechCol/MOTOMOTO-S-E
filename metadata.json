@@ -1,0 +1,6 @@
+{
+  "name": "MotoTaller Pro - Gestión de Taller y Herramientas",
+  "description": "Sistema administrativo offline para negocios de herramientas, repuestos y servicios de motos con base de datos local IndexedDB.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
