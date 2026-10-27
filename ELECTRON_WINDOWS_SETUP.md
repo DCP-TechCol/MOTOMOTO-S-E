@@ -22,24 +22,32 @@ Esta aplicación de gestión de inventario y punto de venta para talleres y vent
 
 ---
 
-## 🛠️ Instrucciones de Prueba y Desarrollo en Windows
+## 🛠️ Instrucciones de Ejecución en Windows
 
-1. **Descargar / Clonar el repositorio** en tu equipo con Windows.
-2. Abrir la terminal (PowerShell o CMD) en la carpeta del proyecto.
-3. Instalar las dependencias:
+### Opción 1 (Recomendada y más fácil): Iniciar directamente en Escritorio con 1 solo comando
+No necesitas abrir navegador ni dos terminales. Simplemente ejecuta:
+```bash
+npm run desktop
+```
+*(o también `npm start`)*.  
+Este comando compila la interfaz en 2 segundos e inicia inmediatamente la ventana de escritorio de Windows de forma nativa y 100% offline.
+
+---
+
+### Opción 2: Modo Desarrollo con Servidor Web Local
+Si deseas abrirlo con recarga en vivo de Vite:
+1. En una terminal, ejecuta:
    ```bash
-   npm install
+   npm run dev
    ```
-4. **Modo Desarrollo con Electron**:
-   - En una primera terminal, inicia el servidor Vite:
-     ```bash
-     npm run dev
-     ```
-   - En una segunda terminal, abre la ventana de Electron conectada a tu servidor:
-     ```bash
-     npm run electron:dev
-     ```
-   - O ejecuta la aplicación empaquetada directamente con `npm run electron:start` una vez compilada.
+2. Si el puerto 3000 estuviera ocupado en tu equipo, Vite usará automáticamente el 3001 o puedes cambiarlo:
+   ```bash
+   npx vite --port 5000
+   ```
+3. Para abrir la ventana de Electron conectada a tu servidor:
+   ```bash
+   npm run electron:dev
+   ```
 
 ---
 
