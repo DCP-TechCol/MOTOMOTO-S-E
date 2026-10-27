@@ -29,6 +29,71 @@ const DEFAULT_CONFIG: ConfiguracionTaller = {
   siguienteNumero: 1,
 };
 
+export function isElectronEnvironment(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
+}
+
+let migrationChecked = false;
+
+async function checkAndMigrateFromIndexedDB(): Promise<void> {
+  if (!isElectronEnvironment() || migrationChecked || !window.electronAPI) return;
+  migrationChecked = true;
+
+  try {
+    const all = await window.electronAPI.db.getAll();
+    const hasData =
+      (all.clientes && all.clientes.length > 0) ||
+      (all.productos && all.productos.length > 0) ||
+      (all.ventas && all.ventas.length > 0);
+
+    if (!hasData && typeof window !== 'undefined' && window.indexedDB) {
+      try {
+        const db = await openDatabase();
+        const [cList, pList, vList, mList, conf] = await Promise.all([
+          rawGetAllFromIDB<Cliente>(db, 'clientes'),
+          rawGetAllFromIDB<Producto>(db, 'productos'),
+          rawGetAllFromIDB<Venta>(db, 'ventas'),
+          rawGetAllFromIDB<MovimientoInventario>(db, 'movimientos'),
+          rawGetAllFromIDB<ConfiguracionTaller>(db, 'configuracion'),
+        ]);
+
+        if (cList.length > 0 || pList.length > 0 || vList.length > 0) {
+          await window.electronAPI.db.migrateFromIndexedDB({
+            clientes: cList,
+            productos: pList,
+            ventas: vList,
+            movimientos: mList,
+            configuracion: conf.length > 0 ? conf[0] : undefined,
+          });
+          console.info('[MotoTaller Electron] Migración exitosa de registros IndexedDB a archivo local.');
+        }
+      } catch (err) {
+        console.warn('[MotoTaller Electron] Migración inicial omitida:', err);
+      }
+    }
+  } catch (err) {
+    console.error('[MotoTaller Electron] Error durante comprobación inicial:', err);
+  }
+}
+
+function rawGetAllFromIDB<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
+  return new Promise((resolve) => {
+    try {
+      if (!db.objectStoreNames.contains(storeName)) {
+        resolve([]);
+        return;
+      }
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onsuccess = () => resolve((req.result as T[]) || []);
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
 let dbInstance: IDBDatabase | null = null;
 
 export function openDatabase(): Promise<IDBDatabase> {
@@ -150,6 +215,14 @@ function ensureDefaultConfig(db: IDBDatabase): Promise<void> {
 // CLIENTES CRUD
 // -------------------------------------------------------------
 export async function getClientes(): Promise<Cliente[]> {
+  if (isElectronEnvironment()) {
+    await checkAndMigrateFromIndexedDB();
+    const all = await window.electronAPI!.db.getAll();
+    return (all.clientes || []).sort(
+      (a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime()
+    );
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('clientes', 'readonly');
@@ -165,6 +238,11 @@ export async function getClientes(): Promise<Cliente[]> {
 }
 
 export async function getClienteById(id: string): Promise<Cliente | null> {
+  if (isElectronEnvironment()) {
+    const all = await window.electronAPI!.db.getAll();
+    return (all.clientes || []).find((c) => c.id === id) || null;
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('clientes', 'readonly');
@@ -176,6 +254,10 @@ export async function getClienteById(id: string): Promise<Cliente | null> {
 }
 
 export async function saveCliente(cliente: Partial<Cliente> & { nombre: string; telefono: string }): Promise<Cliente> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.saveCliente(cliente);
+  }
+
   const db = await openDatabase();
   const esNuevo = !cliente.id;
   const registroFinal: Cliente = {
@@ -200,6 +282,10 @@ export async function saveCliente(cliente: Partial<Cliente> & { nombre: string; 
 }
 
 export async function toggleClienteActivo(id: string): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.toggleClienteActivo(id);
+  }
+
   const db = await openDatabase();
   const cliente = await getClienteById(id);
   if (!cliente) throw new Error('Cliente no encontrado.');
@@ -214,10 +300,31 @@ export async function toggleClienteActivo(id: string): Promise<boolean> {
   });
 }
 
+export async function deleteCliente(id: string): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.deleteCliente(id);
+  }
+
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('clientes', 'readwrite');
+    const store = tx.objectStore('clientes');
+    const req = store.delete(id);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 // -------------------------------------------------------------
 // PRODUCTOS CRUD (REPUESTOS ORIGINALES, GENÉRICOS, HERRAMIENTAS)
 // -------------------------------------------------------------
 export async function getProductos(): Promise<Producto[]> {
+  if (isElectronEnvironment()) {
+    await checkAndMigrateFromIndexedDB();
+    const all = await window.electronAPI!.db.getAll();
+    return (all.productos || []).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('productos', 'readonly');
@@ -233,6 +340,11 @@ export async function getProductos(): Promise<Producto[]> {
 }
 
 export async function getProductoById(id: string): Promise<Producto | null> {
+  if (isElectronEnvironment()) {
+    const all = await window.electronAPI!.db.getAll();
+    return (all.productos || []).find((p) => p.id === id) || null;
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('productos', 'readonly');
@@ -246,6 +358,16 @@ export async function getProductoById(id: string): Promise<Producto | null> {
 export async function saveProducto(
   producto: Partial<Producto> & { codigo: string; nombre: string; precioVenta: number }
 ): Promise<Producto> {
+  if (isElectronEnvironment()) {
+    const todos = await getProductos();
+    const codigoLimpio = producto.codigo.trim().toUpperCase();
+    const repetido = todos.find((p) => p.codigo.toUpperCase() === codigoLimpio && p.id !== producto.id);
+    if (repetido) {
+      throw new Error(`Ya existe un producto con el código SKU o de barras "${codigoLimpio}".`);
+    }
+    return window.electronAPI!.db.saveProducto(producto);
+  }
+
   const db = await openDatabase();
   const esNuevo = !producto.id;
   const codigoLimpio = producto.codigo.trim().toUpperCase();
@@ -313,6 +435,10 @@ export async function saveProducto(
 }
 
 export async function toggleProductoActivo(id: string): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.toggleProductoActivo(id);
+  }
+
   const db = await openDatabase();
   const prod = await getProductoById(id);
   if (!prod) throw new Error('Producto no encontrado.');
@@ -327,6 +453,21 @@ export async function toggleProductoActivo(id: string): Promise<boolean> {
   });
 }
 
+export async function deleteProducto(id: string): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.deleteProducto(id);
+  }
+
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('productos', 'readwrite');
+    const store = tx.objectStore('productos');
+    const req = store.delete(id);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function ajustarStock(
   productoId: string,
   tipo: TipoMovimiento,
@@ -334,6 +475,10 @@ export async function ajustarStock(
   motivo: string,
   referenciaId?: string
 ): Promise<Producto> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.ajustarStock({ productoId, tipo, cantidad, motivo });
+  }
+
   if (cantidad <= 0 && tipo !== 'ajuste') {
     throw new Error('La cantidad debe ser mayor a 0.');
   }
@@ -389,6 +534,14 @@ export async function ajustarStock(
 // VENTAS Y FACTURACIÓN CON SERVICIOS Y REPUESTOS DETALLADOS
 // -------------------------------------------------------------
 export async function getVentas(): Promise<Venta[]> {
+  if (isElectronEnvironment()) {
+    await checkAndMigrateFromIndexedDB();
+    const all = await window.electronAPI!.db.getAll();
+    return (all.ventas || []).sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('ventas', 'readonly');
@@ -406,6 +559,11 @@ export async function getVentas(): Promise<Venta[]> {
 export const getServicios = getVentas;
 
 export async function getVentaById(id: string): Promise<Venta | null> {
+  if (isElectronEnvironment()) {
+    const all = await window.electronAPI!.db.getAll();
+    return (all.ventas || []).find((v) => v.id === id) || null;
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('ventas', 'readonly');
@@ -419,6 +577,10 @@ export async function getVentaById(id: string): Promise<Venta | null> {
 export const getServicioById = getVentaById;
 
 export async function saveVenta(ventaData: Partial<Venta>, esNueva: boolean = true): Promise<Venta> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.saveVenta({ venta: ventaData, esNueva });
+  }
+
   const db = await openDatabase();
   const config = await getConfiguracion();
 
@@ -687,6 +849,10 @@ function aplicarDeltasStock(
 }
 
 export async function registrarPagoVenta(ventaId: string, pagoData: Omit<PagoVenta, 'id'>): Promise<Venta> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.registrarPagoVenta({ ventaId, pagoData });
+  }
+
   const db = await openDatabase();
   const vta = await getVentaById(ventaId);
   if (!vta) throw new Error('Venta no encontrada.');
@@ -729,6 +895,10 @@ export async function registrarPagoVenta(ventaId: string, pagoData: Omit<PagoVen
 export const registrarPagoServicio = registrarPagoVenta;
 
 export async function anularVenta(ventaId: string, restaurarStock: boolean = true): Promise<Venta> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.anularVenta({ id: ventaId, revertirStock: restaurarStock });
+  }
+
   const db = await openDatabase();
   const vta = await getVentaById(ventaId);
   if (!vta) throw new Error('Venta no encontrada.');
@@ -796,6 +966,13 @@ export async function anularVenta(ventaId: string, restaurarStock: boolean = tru
 // MOVIMIENTOS
 // -------------------------------------------------------------
 export async function getMovimientos(): Promise<MovimientoInventario[]> {
+  if (isElectronEnvironment()) {
+    const all = await window.electronAPI!.db.getAll();
+    return (all.movimientos || []).sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('movimientos', 'readonly');
@@ -814,6 +991,11 @@ export async function getMovimientos(): Promise<MovimientoInventario[]> {
 // CONFIGURACION
 // -------------------------------------------------------------
 export async function getConfiguracion(): Promise<ConfiguracionTaller> {
+  if (isElectronEnvironment()) {
+    const all = await window.electronAPI!.db.getAll();
+    return all.configuracion || DEFAULT_CONFIG;
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('configuracion', 'readonly');
@@ -828,6 +1010,10 @@ export async function getConfiguracion(): Promise<ConfiguracionTaller> {
 }
 
 export async function saveConfiguracion(config: ConfiguracionTaller): Promise<ConfiguracionTaller> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.saveConfiguracion(config);
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('configuracion', 'readwrite');
@@ -842,6 +1028,10 @@ export async function saveConfiguracion(config: ConfiguracionTaller): Promise<Co
 // RESPALDO Y RESTAURACIÓN JSON
 // -------------------------------------------------------------
 export async function exportarBaseDatosJSON(): Promise<string> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.exportarBaseDatosJSON();
+  }
+
   const [clientes, productos, ventas, movimientos, configuracion] = await Promise.all([
     getClientes(),
     getProductos(),
@@ -867,6 +1057,11 @@ export async function exportarBaseDatosJSON(): Promise<string> {
 }
 
 export async function importarBaseDatosJSON(jsonStr: string): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    await window.electronAPI!.db.importarBaseDatosJSON(jsonStr);
+    return true;
+  }
+
   const parsed = JSON.parse(jsonStr);
   if (!parsed || !parsed.datos) {
     throw new Error('El archivo de respaldo no tiene un formato válido.');
@@ -905,6 +1100,11 @@ export async function importarBaseDatosJSON(jsonStr: string): Promise<boolean> {
 }
 
 export async function limpiarTodaLaBaseDatos(): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    await window.electronAPI!.db.limpiarBaseDatos();
+    return true;
+  }
+
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(['clientes', 'productos', 'ventas', 'movimientos', 'configuracion'], 'readwrite');
@@ -927,6 +1127,10 @@ export async function cargarDatosDemo(): Promise<{
   productos: number;
   ventas: number;
 }> {
+  if (isElectronEnvironment()) {
+    return window.electronAPI!.db.cargarDatosDemo();
+  }
+
   const db = await openDatabase();
 
   const demoClientes: Cliente[] = [

@@ -54,6 +54,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   const current = titulosSeccion[seccionActual] || { title: 'MOTOMOTO S&E', subtitle: '' };
 
+  const isElectron = typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
+
+  const handleOpenUserData = async () => {
+    if (window.electronAPI?.system?.openUserDataFolder) {
+      await window.electronAPI.system.openUserDataFolder();
+    }
+  };
+
   return (
     <header className="h-16 px-6 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-4 sticky top-0 z-20 no-print">
       {/* Title & Breadcrumb */}
@@ -62,16 +70,33 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="text-xs font-semibold text-red-500">MOTOMOTO S&E</span>
           <span className="text-xs text-zinc-600">/</span>
           <h2 className="text-sm font-semibold text-zinc-100 truncate">{current.title}</h2>
+          {isElectron && (
+            <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Escritorio Offline
+            </span>
+          )}
         </div>
         <p className="text-[11px] text-zinc-400 truncate hidden sm:block">{current.subtitle}</p>
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2.5 shrink-0">
+        {isElectron && (
+          <button
+            onClick={handleOpenUserData}
+            title="Abrir carpeta de base de datos local en Windows (%APPDATA%)"
+            className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-900 border border-zinc-800 rounded-lg transition-colors text-xs flex items-center gap-1.5"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden lg:inline text-zinc-300">Datos Locales</span>
+          </button>
+        )}
+
         <button
           onClick={onRefrescar}
           disabled={isCargando}
-          title="Actualizar datos desde IndexedDB"
+          title={isElectron ? 'Actualizar datos desde archivo local' : 'Actualizar datos desde IndexedDB'}
           className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 rounded-lg transition-colors text-xs flex items-center gap-1.5"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isCargando ? 'animate-spin' : ''}`} />

@@ -1,14 +1,47 @@
 {
-  "name": "react-example",
+  "name": "mototaller-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "electron:start": "electron .",
+    "electron:dev": "cross-env VITE_DEV_SERVER_URL=http://localhost:3000 electron .",
+    "electron:build": "npm run build && electron-builder --win",
+    "build:win": "npm run build && electron-builder --win nsis",
+    "build:portable": "npm run build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.mototaller.pro",
+    "productName": "MotoTaller Pro",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "public/assets/aistudio/image_b67a324e.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MotoTaller Pro",
+      "uninstallDisplayName": "MotoTaller Pro"
+    }
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -27,6 +60,9 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",

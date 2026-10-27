@@ -12,6 +12,7 @@ import {
   Save,
   ShieldCheck,
   Building2,
+  FolderOpen,
 } from 'lucide-react';
 import { ConfiguracionTaller } from '../../types';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -207,17 +208,38 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
 
       {/* Almacenamiento Local Offline & Respaldo */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
-        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800 gap-2">
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-emerald-400" />
             <div>
-              <h3 className="text-sm font-semibold text-zinc-100">Almacenamiento Local en IndexedDB</h3>
-              <p className="text-xs text-zinc-400">Estado de tu base de datos offline, respaldos y utilidades</p>
+              <h3 className="text-sm font-semibold text-zinc-100">
+                {typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron)
+                  ? 'Almacenamiento Local de Escritorio (Disco Duro / %APPDATA%)'
+                  : 'Almacenamiento Local en IndexedDB'}
+              </h3>
+              <p className="text-xs text-zinc-400">
+                {typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron)
+                  ? 'Base de datos persistente en mototaller_db.json en tu disco local'
+                  : 'Estado de tu base de datos offline, respaldos y utilidades'}
+              </p>
             </div>
           </div>
-          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
-            100% Sin Internet
-          </span>
+          <div className="flex items-center gap-2">
+            {typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron) && (
+              <button
+                type="button"
+                onClick={() => window.electronAPI?.system?.openUserDataFolder?.()}
+                className="px-2.5 py-1 text-xs text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 flex items-center gap-1.5 transition-colors"
+                title="Abrir carpeta de datos en el Explorador de Windows"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                <span>Abrir Carpeta</span>
+              </button>
+            )}
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+              100% Sin Internet
+            </span>
+          </div>
         </div>
 
         {/* Resumen de registros guardados */}
